@@ -1,0 +1,13 @@
+#progress {
+  background-color: rgba(0, 0, 0, .1);
+}
+
+#bar {
+  min-height: 1em;
+  background-color: lime;
+  transition: width .1s;
+}
+
+ul {
+  list-style: none;
+}

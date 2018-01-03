@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>upload.io</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://d3js.org/d3-selection.v1.min.js"></script>
+    <script src="js/script.js"></script>
+  </head>
+  <body>
+    <h1>File uploader</h1>
+    <p>
+      It sends files via WebSocket to the server <em>wss://echo.websocket.org</em>. No files are saved anywhere.
+    </p>
+    <p>
+      <div id="progress"><div id="bar"></div></div>
+    </p>
+    <input type="file" id="file-input" multiple/>
+    <h2>Queued:</h2>
+    <ol id='queued'></ol>
+    <h2>Uploaded:</h2>
+    <ol id='uploaded'></ol>
+    <h2>Failed:</h2>
+    <ol id='failed'></ol>
+  </body>
+</html>
