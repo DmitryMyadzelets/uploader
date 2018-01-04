@@ -64,7 +64,11 @@ module.exports = function (url) {
     return ws && ws.close(code, reason)
   }
 
-  self.open = create
+  self.open = function () {
+    if (!connected) {
+      create()
+    }
+  }
 
   create()
 
