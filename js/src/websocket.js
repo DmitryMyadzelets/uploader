@@ -5,29 +5,41 @@
   The return value of 'send' and 'close' methods should be ignored.
   Reconnect stops when you close the websocket.
 
+  The WebSocket may emit 'onclose' event regardless its previous state,
+  i.e. if it wasn't open before.
+  This websocket emits 'connect' and 'disconnect' events upon its state.
+  The 'error' event is emitted when it's in connected state only.
 */
 var emitter = require('./emitter')
 
 var WS = window.MozWebSocket || window.WebSocket
 
-var handlers = [
-  {name: 'onopen', event: 'connect'},
-  {name: 'onerror', event: 'error'},
-  {name: 'onclose', event: 'disconnect'},
-  {name: 'onmessage', event: 'message'}
-]
-
-function handle (ws, emitter) {
-  handlers.forEach(function (o) {
-    ws[o.name] = function (evt) {
-      emitter.emit(o.event, evt)
-    }
-  })
-}
-
 module.exports = function (url) {
   var self = emitter()
-  var ws, tid
+  var ws, tid, connected
+
+  function onopen () {
+    connected = true
+    self.emit('connect')
+  }
+
+  function onclose () {
+    if (connected) {
+      self.emit('disconnect')
+    }
+    connected = false
+  }
+
+  function onmessage (evt) {
+    self.emit('message', evt.data)
+  }
+
+  function onerror (err) {
+    tid = setTimeout(create, 5000)
+    if (connected) {
+      self.emit('error', err)
+    }
+  }
 
   function create () {
     if (ws) {
@@ -35,7 +47,11 @@ module.exports = function (url) {
     }
     ws = new WS(url)
     ws.binaryType = 'arraybuffer'
-    handle(ws, self)
+    // Events handlers
+    ws.onopen = onopen
+    ws.onclose = onclose
+    ws.onerror = onerror
+    ws.onmessage = onmessage
   }
 
   self.send = function (data) {
@@ -43,6 +59,7 @@ module.exports = function (url) {
   }
 
   self.close = function (code, reason) {
+    console.log('readyState:', ws.readyState)
     clearTimeout(tid)
     return ws && ws.close(code, reason)
   }
@@ -50,10 +67,6 @@ module.exports = function (url) {
   self.open = create
 
   create()
-
-  self.on('error', function () {
-    tid = setTimeout(create, 5000)
-  })
 
   return self
 }
