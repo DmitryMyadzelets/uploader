@@ -1,8 +1,8 @@
 /*
-  Creates websocket which can reconnect on errors.
+  Creates a websocket which can reconnect on errors.
   It doesn't expose WebSocket object since it should be recreated each
-  time an error occures, but exposes send and close methods.
-  Exposes
+  time an error occurs, but exposes send and close methods.
+  Reconnect stops when you close the websocket.
 
 */
 var emitter = require('./emitter')
@@ -24,19 +24,12 @@ function handle (ws, emitter) {
   })
 }
 
-function unhandle (ws) {
-  handlers.forEach(function (o) {
-    ws[o.name] = null
-  })
-}
-
 module.exports = function (url) {
   var self = emitter()
-  var ws
+  var ws, tid
 
   function create () {
     if (ws) {
-      unhandle(ws)
       ws = null
     }
     ws = new WS(url)
@@ -46,6 +39,7 @@ module.exports = function (url) {
       ws.send(data)
     }
     self.close = function (code, reason) {
+      clearTimeout(tid)
       ws.close(code, reason)
     }
   }
@@ -53,7 +47,7 @@ module.exports = function (url) {
   create()
 
   self.on('error', function () {
-    setTimeout(create, 5000)
+    tid = setTimeout(create, 5000)
   })
 
   return self
