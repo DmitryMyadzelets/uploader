@@ -59,7 +59,6 @@ module.exports = function (url) {
   }
 
   self.close = function (code, reason) {
-    console.log('readyState:', ws.readyState)
     clearTimeout(tid)
     return ws && ws.close(code, reason)
   }
