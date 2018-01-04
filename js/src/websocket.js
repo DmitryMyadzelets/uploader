@@ -47,6 +47,8 @@ module.exports = function (url) {
     return ws && ws.close(code, reason)
   }
 
+  self.open = create
+
   create()
 
   self.on('error', function () {
