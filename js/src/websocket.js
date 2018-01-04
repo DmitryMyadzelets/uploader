@@ -1,7 +1,8 @@
 /*
   Creates a websocket which can reconnect on errors.
   It doesn't expose WebSocket object since it should be recreated each
-  time an error occurs, but exposes send and close methods.
+  time an error occurs, but exposes 'send' and 'close' methods.
+  The return value of 'send' and 'close' methods should be ignored.
   Reconnect stops when you close the websocket.
 
 */
@@ -35,13 +36,15 @@ module.exports = function (url) {
     ws = new WS(url)
     ws.binaryType = 'arraybuffer'
     handle(ws, self)
-    self.send = function (data) {
-      ws.send(data)
-    }
-    self.close = function (code, reason) {
-      clearTimeout(tid)
-      ws.close(code, reason)
-    }
+  }
+
+  self.send = function (data) {
+    return ws && ws.send(data)
+  }
+
+  self.close = function (code, reason) {
+    clearTimeout(tid)
+    return ws && ws.close(code, reason)
   }
 
   create()
