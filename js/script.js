@@ -121,11 +121,53 @@ module.exports = function (callback) {
 }
 
 },{}],4:[function(require,module,exports){
-/* global WebSocket, d3 */
+var emitter = require('./emitter')
+
+var WS = window.MozWebSocket || window.WebSocket
+
+var events = [
+  {name: 'onopen', event: 'connect'},
+  {name: 'onerror', event: 'error'},
+  {name: 'onclose', event: 'disconnect'},
+  {name: 'onmessage', event: 'message'}
+]
+
+function hook (ws, emitter) {
+  events.forEach(function (o) {
+    ws[o.name] = function (evt) {
+      emitter.emit(o.event, evt)
+    }
+  })
+}
+
+module.exports = function (url) {
+  var self = emitter()
+  var ws
+
+  function create () {
+    ws = new WS(url)
+    ws.binaryType = 'arraybuffer'
+    hook(ws, self)
+    self.send = ws.send.bind(ws)
+    self.close = ws.close.bind(ws)
+  }
+
+  create()
+
+  self.on('error', function () {
+    setTimeout(create, 5000)
+  })
+
+  return self
+}
+
+},{"./emitter":1}],5:[function(require,module,exports){
+/* global d3 */
 
 var ready = require('./ready')
 var reader = require('./reader')
 var emitter = require('./emitter')
+var websocket = require('./websocket')
 
 var events = emitter()
 var queue = []
@@ -148,18 +190,6 @@ function expectFiles (el) {
       events.emit('file', files[i])
     }
   })
-}
-
-function websocket (url) {
-  var ws = new WebSocket(url, 'json')
-  ws.binaryType = 'arraybuffer'
-
-  ws.onopen = events.emit.bind(events, 'connect')
-  ws.onclose = events.emit.bind(events, 'disconnect')
-  ws.onmessage = events.emit.bind(events, 'message')
-  ws.onerror = console.error.bind(console)
-
-  return ws
 }
 
 // function elapsed (msec) {
@@ -206,9 +236,30 @@ ready(function () {
       progress(chunk.end / chunk.size)
     })
 
+  function status (ok) {
+    d3.select('#status')
+      .text(ok ? 'Connected' : 'Disconnected')
+      .classed('connected', ok)
+  }
+  status()
+
   // File read and send logic
 
   var ws = websocket('wss://echo.websocket.org')
+  ws
+    .on('connect', status.bind(null, true))
+    .on('disconnect', status.bind(null, false))
+    .on('message', events.emit.bind(events, 'message'))
+    .on('connect', function () {
+      if (queue.length > 0) {
+        events.emit('upload')
+      }
+    })
+    .on('disconnect', function () {
+      if (queue.length > 0) {
+        events.emit('failed')
+      }
+    })
 
   events.on('file', function enqueue (file) {
     queue.push({
@@ -267,4 +318,4 @@ ready(function () {
   events.on('failed', view)
 })
 
-},{"./emitter":1,"./reader":2,"./ready":3}]},{},[4]);
+},{"./emitter":1,"./reader":2,"./ready":3,"./websocket":4}]},{},[5]);

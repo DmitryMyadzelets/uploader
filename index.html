@@ -10,12 +10,14 @@
   <body>
     <h1>File uploader</h1>
     <p>
-      It sends files via WebSocket to the server <em>wss://echo.websocket.org</em>. No files are saved anywhere.
+      It sends files via WebSocket to the echo server <em>wss://echo.websocket.org</em>. No files are saved anywhere.
     </p>
     <p>
       <div id="progress"><div id="bar"></div></div>
     </p>
     <input type="file" id="file-input" multiple/>
+    <h2>Status:</h2>
+    <p id='status'>&nbsp;</p>
     <h2>Queued:</h2>
     <ol id='queued'></ol>
     <h2>Uploaded:</h2>

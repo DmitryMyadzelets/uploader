@@ -8,6 +8,10 @@
   transition: width .1s;
 }
 
-ul {
-  list-style: none;
+#status {
+  color: red;
+}
+
+#status.connected {
+  color: green;
 }
