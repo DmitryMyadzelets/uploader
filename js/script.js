@@ -22,7 +22,12 @@ function emit (event, o) {
 module.exports = function (o) {
   o = o || {}
   o.on = on
-  o.emit = emit
+  o.emit = function () {
+    var args = arguments
+    setTimeout(function () {
+      emit.apply(o, args)
+    })
+  }
   o.events = {}
   return o
 }
@@ -122,73 +127,148 @@ module.exports = function (callback) {
 
 },{}],4:[function(require,module,exports){
 /*
-  Creates websocket which can reconnect on errors.
-  It doesn't expose WebSocket object since it should be recreated each
-  time an error occures, but exposes send and close methods.
-  Exposes
+  Reads, chunks and sends one file via websocket.
+  Emits events: ['progress', 'done', 'error'].
+*/
 
+var reader = require('./reader')
+var emitter = require('./emitter')
+
+module.exports = function (ws) {
+  var self, read, progress, next
+
+  function error (err) {
+    read = null
+    self.emit('error', err)
+  }
+
+  ws
+    .on('message', function (message) {
+      self.emit('progress', progress)
+      // TODO: check the message
+      if (next) {
+        read()
+      } else {
+        read = null
+        self.emit('done')
+      }
+    })
+    .on('error', function () {
+      if (read) {
+        error(new Error('Upload failed due to websocket error'))
+      }
+    })
+
+  function onchunk (err, chunk) {
+    if (err) {
+      return error(err)
+    }
+    progress = chunk.end / chunk.size
+    next = chunk.end < chunk.size
+    ws.send(chunk.data)
+  }
+
+  self = function (file) {
+    read = reader(file, onchunk)
+    read()
+  }
+
+  self.ready = function () {
+    return !read
+  }
+
+  return emitter(self)
+}
+
+},{"./emitter":1,"./reader":2}],5:[function(require,module,exports){
+/*
+  Creates a websocket which can reconnect on errors.
+  It doesn't expose WebSocket object since it should be recreated each
+  time an error occurs, but exposes 'send' and 'close' methods.
+  The return value of 'send' and 'close' methods should be ignored.
+  Reconnect stops when you close the websocket.
+
+  The WebSocket may emit 'onclose' event regardless its previous state,
+  i.e. if it wasn't open before.
+  This websocket emits 'connect' and 'disconnect' events upon its state.
+  The 'error' event is emitted when it's in connected state only.
 */
 var emitter = require('./emitter')
 
 var WS = window.MozWebSocket || window.WebSocket
 
-var handlers = [
-  {name: 'onopen', event: 'connect'},
-  {name: 'onerror', event: 'error'},
-  {name: 'onclose', event: 'disconnect'},
-  {name: 'onmessage', event: 'message'}
-]
-
-function handle (ws, emitter) {
-  handlers.forEach(function (o) {
-    ws[o.name] = function (evt) {
-      emitter.emit(o.event, evt)
-    }
-  })
-}
-
-function unhandle (ws) {
-  handlers.forEach(function (o) {
-    ws[o.name] = null
-  })
-}
-
 module.exports = function (url) {
   var self = emitter()
-  var ws
+  var ws, tid, connected
+
+  function onopen () {
+    connected = true
+    self.emit('connect')
+  }
+
+  function onclose () {
+    if (connected) {
+      self.emit('disconnect')
+    }
+    connected = false
+  }
+
+  function onmessage (evt) {
+    self.emit('message', evt.data)
+  }
+
+  function onerror (err) {
+    tid = setTimeout(create, 5000)
+    if (connected) {
+      self.emit('error', err)
+    }
+  }
 
   function create () {
     if (ws) {
-      unhandle(ws)
       ws = null
     }
     ws = new WS(url)
     ws.binaryType = 'arraybuffer'
-    handle(ws, self)
-    self.send = function (data) {
-      ws.send(data)
+    // Events handlers
+    ws.onopen = onopen
+    ws.onclose = onclose
+    ws.onerror = onerror
+    ws.onmessage = onmessage
+  }
+
+  self.send = function (data) {
+    return ws && ws.send(data)
+  }
+
+  self.close = function (code, reason) {
+    clearTimeout(tid)
+    return ws && ws.close(code, reason)
+  }
+
+  self.open = function () {
+    if (!connected) {
+      create()
     }
-    self.close = function (code, reason) {
-      ws.close(code, reason)
-    }
+  }
+
+  self.connected = function () {
+    return connected
   }
 
   create()
 
-  self.on('error', function () {
-    setTimeout(create, 5000)
-  })
-
   return self
 }
 
-},{"./emitter":1}],5:[function(require,module,exports){
+},{"./emitter":1}],6:[function(require,module,exports){
 /* global d3 */
 
 var ready = require('./ready')
-var reader = require('./reader')
+// var reader = require('./reader')
 var emitter = require('./emitter')
 var websocket = require('./websocket')
+var sender = require('./upload')
 
 var events = emitter()
 var queue = []
@@ -249,14 +329,6 @@ ready(function () {
   }(document.getElementById('bar')))
   progress(0)
 
-  events
-    .on('begin', function () {
-      progress(0)
-    })
-    .on('chunk', function (chunk) {
-      progress(chunk.end / chunk.size)
-    })
-
   function status (ok) {
     d3.select('#status')
       .text(ok ? 'Connected' : 'Disconnected')
@@ -264,22 +336,37 @@ ready(function () {
   }
   status()
 
-  // File read and send logic
+  // logic
 
   var ws = websocket('wss://echo.websocket.org')
+  var send = sender(ws)
+
+  function check () {
+    if (ws.connected() && send.ready()) {
+      if (queue.length > 0) {
+        send(queue[0].file)
+      }
+    }
+    view()
+  }
+
   ws
+    .on('connect', function () {
+      check()
+    })
     .on('connect', status.bind(null, true))
     .on('disconnect', status.bind(null, false))
-    .on('message', events.emit.bind(events, 'message'))
-    .on('connect', function () {
-      if (queue.length > 0) {
-        events.emit('upload')
-      }
+
+  send
+    .on('progress', progress)
+    .on('done', function () {
+      uploaded.push(queue.shift())
+      check()
     })
-    .on('disconnect', function () {
-      if (queue.length > 0) {
-        events.emit('failed')
-      }
+    .on('error', function (err) {
+      console.warn(err)
+      failed.push(queue.shift())
+      check()
     })
 
   events.on('file', function enqueue (file) {
@@ -287,56 +374,8 @@ ready(function () {
       file: file,
       id: uid()
     })
-    if (queue.length === 1) {
-      events.emit('upload')
-    }
+    check()
   })
-  events.on('file', view)
-
-  function onchunk (err, chunk) {
-    if (err) {
-      return events.emit('failed')
-    }
-    events.emit('chunk', chunk)
-  }
-
-  events.on('upload', function () {
-    var q = queue[0]
-    q.read = reader(q.file, onchunk)
-    q.read()
-    events.emit('begin', q)
-  })
-
-  events.on('chunk', function (chunk) {
-    ws.send(chunk.data)
-    queue[0].next = chunk.end < chunk.size
-  })
-
-  events.on('message', function (message) {
-    var q = queue[0]
-    if (q.next) {
-      q.read()
-    } else {
-      events.emit('end', q)
-    }
-  })
-
-  events
-    .on('end', function () {
-      uploaded.push(queue.shift())
-      if (queue.length > 0) {
-        events.emit('upload')
-      }
-    })
-    .on('failed', function () {
-      failed.push(queue.shift())
-      if (queue.length > 0) {
-        events.emit('upload')
-      }
-    })
-
-  events.on('end', view)
-  events.on('failed', view)
 })
 
-},{"./emitter":1,"./reader":2,"./ready":3,"./websocket":4}]},{},[5]);
+},{"./emitter":1,"./ready":3,"./upload":4,"./websocket":5}]},{},[6]);

@@ -69,6 +69,10 @@ module.exports = function (url) {
     }
   }
 
+  self.connected = function () {
+    return connected
+  }
+
   create()
 
   return self

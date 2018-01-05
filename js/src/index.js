@@ -1,9 +1,10 @@
 /* global d3 */
 
 var ready = require('./ready')
-var reader = require('./reader')
+// var reader = require('./reader')
 var emitter = require('./emitter')
 var websocket = require('./websocket')
+var sender = require('./upload')
 
 var events = emitter()
 var queue = []
@@ -64,14 +65,6 @@ ready(function () {
   }(document.getElementById('bar')))
   progress(0)
 
-  events
-    .on('begin', function () {
-      progress(0)
-    })
-    .on('chunk', function (chunk) {
-      progress(chunk.end / chunk.size)
-    })
-
   function status (ok) {
     d3.select('#status')
       .text(ok ? 'Connected' : 'Disconnected')
@@ -79,22 +72,37 @@ ready(function () {
   }
   status()
 
-  // File read and send logic
+  // logic
 
   var ws = websocket('wss://echo.websocket.org')
+  var send = sender(ws)
+
+  function check () {
+    if (ws.connected() && send.ready()) {
+      if (queue.length > 0) {
+        send(queue[0].file)
+      }
+    }
+    view()
+  }
+
   ws
+    .on('connect', function () {
+      check()
+    })
     .on('connect', status.bind(null, true))
     .on('disconnect', status.bind(null, false))
-    .on('message', events.emit.bind(events, 'message'))
-    .on('connect', function () {
-      if (queue.length > 0) {
-        events.emit('upload')
-      }
+
+  send
+    .on('progress', progress)
+    .on('done', function () {
+      uploaded.push(queue.shift())
+      check()
     })
-    .on('disconnect', function () {
-      if (queue.length > 0) {
-        events.emit('failed')
-      }
+    .on('error', function (err) {
+      console.warn(err)
+      failed.push(queue.shift())
+      check()
     })
 
   events.on('file', function enqueue (file) {
@@ -102,54 +110,6 @@ ready(function () {
       file: file,
       id: uid()
     })
-    if (queue.length === 1) {
-      events.emit('upload')
-    }
+    check()
   })
-  events.on('file', view)
-
-  function onchunk (err, chunk) {
-    if (err) {
-      return events.emit('failed')
-    }
-    events.emit('chunk', chunk)
-  }
-
-  events.on('upload', function () {
-    var q = queue[0]
-    q.read = reader(q.file, onchunk)
-    q.read()
-    events.emit('begin', q)
-  })
-
-  events.on('chunk', function (chunk) {
-    ws.send(chunk.data)
-    queue[0].next = chunk.end < chunk.size
-  })
-
-  events.on('message', function (message) {
-    var q = queue[0]
-    if (q.next) {
-      q.read()
-    } else {
-      events.emit('end', q)
-    }
-  })
-
-  events
-    .on('end', function () {
-      uploaded.push(queue.shift())
-      if (queue.length > 0) {
-        events.emit('upload')
-      }
-    })
-    .on('failed', function () {
-      failed.push(queue.shift())
-      if (queue.length > 0) {
-        events.emit('upload')
-      }
-    })
-
-  events.on('end', view)
-  events.on('failed', view)
 })
