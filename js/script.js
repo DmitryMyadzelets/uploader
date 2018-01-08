@@ -52,12 +52,7 @@ function emit (event, o) {
 module.exports = function (o) {
   o = o || {}
   o.on = on
-  o.emit = function () {
-    var args = arguments
-    setTimeout(function () {
-      emit.apply(o, args)
-    })
-  }
+  o.emit = emit
   o.events = {}
   return o
 }
@@ -318,7 +313,7 @@ ready(function () {
     view()
   })
 
-  function remove (a) {
+  function unqueue (a) {
     var i = queue.findIndex(function key (b) {
       return a.id === b.id
     })
@@ -327,16 +322,15 @@ ready(function () {
 
   upload
     .on('done', function (o) {
-      uploaded.push(remove(o))
+      uploaded.push(unqueue(o))
       view()
     })
     .on('failed', function (o) {
-      console.log('failed', o.file.name)
-      failed.push(remove(o))
+      failed.push(unqueue(o))
       view()
     })
-    .on('error', function (err) {
-      console.error('error', err)
+    .on('error', function (ignore) {
+      // console.error('error', err)
     })
 })
 
