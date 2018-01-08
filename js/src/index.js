@@ -1,24 +1,15 @@
 /* global d3 */
 
 var ready = require('./ready')
-// var reader = require('./reader')
-var emitter = require('./emitter')
-var websocket = require('./websocket')
-var sender = require('./upload')
+var emitter = require('./upload/emitter')
+var upload = require('./upload')('wss://echo.websocket.org')
 
 var events = emitter()
 var queue = []
 var uploaded = []
 var failed = []
-var uid = (function () {
-  var id = 0
-  return function () {
-    id += 1
-    return id
-  }
-}())
 
-function expectFiles (el) {
+function expectFiles (el, callback) {
   el.addEventListener('change', function () {
     var files = el.files
     var i = files.length
@@ -74,42 +65,25 @@ ready(function () {
 
   // logic
 
-  var ws = websocket('wss://echo.websocket.org')
-  var send = sender(ws)
-
-  function check () {
-    if (ws.connected() && send.ready()) {
-      if (queue.length > 0) {
-        send(queue[0].file)
-      }
-    }
+  events.on('file', function (file) {
+    var o = upload(file)
+    queue.push(o)
     view()
-  }
+  })
 
-  ws
-    .on('connect', function () {
-      check()
-    })
+  upload
+    .on('progress', progress)
     .on('connect', status.bind(null, true))
     .on('disconnect', status.bind(null, false))
-
-  send
-    .on('progress', progress)
-    .on('done', function () {
-      uploaded.push(queue.shift())
-      check()
+    .on('done', function (o) {
+      uploaded.push(queue.pop())
+      view()
+    })
+    .on('failed', function (o) {
+      failed.push(queue.pop())
+      view()
     })
     .on('error', function (err) {
-      console.warn(err)
-      failed.push(queue.shift())
-      check()
+      console.error('error', err)
     })
-
-  events.on('file', function enqueue (file) {
-    queue.push({
-      file: file,
-      id: uid()
-    })
-    check()
-  })
 })
