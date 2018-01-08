@@ -63,6 +63,11 @@ ready(function () {
   }
   status()
 
+  upload
+    .on('progress', progress)
+    .on('connect', status.bind(null, true))
+    .on('disconnect', status.bind(null, false))
+
   // logic
 
   events.on('file', function (file) {
@@ -71,16 +76,21 @@ ready(function () {
     view()
   })
 
+  function remove (a) {
+    var i = queue.findIndex(function key (b) {
+      return a.id === b.id
+    })
+    return queue.splice(i, 1)[0]
+  }
+
   upload
-    .on('progress', progress)
-    .on('connect', status.bind(null, true))
-    .on('disconnect', status.bind(null, false))
     .on('done', function (o) {
-      uploaded.push(queue.pop())
+      uploaded.push(remove(o))
       view()
     })
     .on('failed', function (o) {
-      failed.push(queue.pop())
+      console.log('failed', o.file.name)
+      failed.push(remove(o))
       view()
     })
     .on('error', function (err) {
