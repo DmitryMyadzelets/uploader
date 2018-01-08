@@ -21,12 +21,7 @@ function emit (event, o) {
 module.exports = function (o) {
   o = o || {}
   o.on = on
-  o.emit = function () {
-    var args = arguments
-    setTimeout(function () {
-      emit.apply(o, args)
-    })
-  }
+  o.emit = emit
   o.events = {}
   return o
 }
