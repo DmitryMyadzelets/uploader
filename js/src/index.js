@@ -85,10 +85,12 @@ ready(function () {
 
   upload
     .on('done', function (o) {
+      console.log('done', o)
       uploaded.push(unqueue(o))
       view()
     })
     .on('failed', function (o) {
+      console.log('failed', o)
       failed.push(unqueue(o))
       view()
     })

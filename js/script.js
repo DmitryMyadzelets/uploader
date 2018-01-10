@@ -71,7 +71,7 @@ var uid = (function () {
 }())
 
 module.exports = function (url) {
-  var self, ws, connected, read, progress, next
+  var self, ws, connected, read, progress, next, file, meta
   var queue = []
 
   function error (err) {
@@ -80,7 +80,23 @@ module.exports = function (url) {
 
   function fail () {
     read = null
+    meta = null
     self.emit('failed', queue.shift())
+  }
+
+  // Entry point for the read-send process
+  function check () {
+    if (connected && !read && !meta) {
+      if (queue.length > 0) {
+        file = queue[0].file
+        meta = JSON.stringify({
+          name: file.name,
+          size: file.size,
+          type: file.type
+        })
+        ws.send(meta)
+      }
+    }
   }
 
   function onchunk (err, chunk) {
@@ -92,15 +108,6 @@ module.exports = function (url) {
     progress = chunk.end / chunk.size
     next = chunk.end < chunk.size
     ws.send(chunk.data)
-  }
-
-  function check () {
-    if (connected && !read) {
-      if (queue.length > 0) {
-        read = reader(queue[0].file, onchunk)
-        read()
-      }
-    }
   }
 
   function onopen () {
@@ -118,15 +125,31 @@ module.exports = function (url) {
     }
   }
 
-  function onmessage () {
+  function onmessage (message) {
     self.emit('progress', progress)
       // TODO: check the message
-    if (next) {
-      read()
+    if (meta) {
+      meta = null
+      try {
+        var o = JSON.parse(message.data)
+        if (o.error) {
+          throw new Error(o.error.message)
+        }
+        read = reader(file, onchunk)
+        read()
+      } catch (err) {
+        error(err)
+        fail()
+        check()
+      }
     } else {
-      read = null
-      self.emit('done', queue.shift())
-      check()
+      if (next) {
+        read()
+      } else {
+        read = null
+        self.emit('done', queue.shift())
+        check()
+      }
     }
   }
 
@@ -135,6 +158,7 @@ module.exports = function (url) {
     ws.onopen = onopen
     ws.onclose = onclose
     ws.onmessage = onmessage
+    ws.binaryType = 'arraybuffer'
     return err && read && error(err)
   })
 
@@ -322,10 +346,12 @@ ready(function () {
 
   upload
     .on('done', function (o) {
+      console.log('done', o)
       uploaded.push(unqueue(o))
       view()
     })
     .on('failed', function (o) {
+      console.log('failed', o)
       failed.push(unqueue(o))
       view()
     })
