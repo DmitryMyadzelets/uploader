@@ -2,6 +2,7 @@ var reader = require('./reader')
 var emitter = require('./emitter')
 var reconnect = require('./reconnect')
 
+// Unique ID generator
 var uid = (function () {
   var id = 0
   return function () {
@@ -9,6 +10,15 @@ var uid = (function () {
     return id
   }
 }())
+
+/*
+  The module has three states: {initial, reading and sending}.
+  The busy (reading and sending) state is composed of two values: {meta, read}.
+  {meta} states for sending file's meta information in JSON format.
+  {read} implies reading and sending the file's content as binary data.
+
+  The module emits events: {connect, disconnect, progress, done, failed}
+*/
 
 module.exports = function (url) {
   var self, ws, connected, read, progress, next, file, meta
@@ -26,7 +36,7 @@ module.exports = function (url) {
 
   // Entry point for the read-send process
   function check () {
-    if (connected && !read && !meta) {
+    if (connected && !(read || meta)) {
       if (queue.length > 0) {
         file = queue[0].file
         meta = JSON.stringify({
