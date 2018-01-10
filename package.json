@@ -1,0 +1,26 @@
+{
+  "name": "upload.io",
+  "version": "1.0.0",
+  "description": "Uploads files via WebSocket",
+  "main": "",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "watch": "watchify js/src -v -o js/script.js",
+    "build": "minify js/script.js -o js/script.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DmitryMyadzelets/uploader.git"
+  },
+  "keywords": [
+    "WebSocket",
+    "browser",
+    "upload"
+  ],
+  "author": "Dmitry Myadzelets",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/DmitryMyadzelets/uploader/issues"
+  },
+  "homepage": "https://github.com/DmitryMyadzelets/uploader#readme"
+}
