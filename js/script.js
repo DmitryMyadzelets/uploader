@@ -105,6 +105,12 @@ module.exports = function (url) {
           type: file.type
         })
         ws.send(meta)
+      } else {
+        ws.close()
+      }
+    } else {
+      if (!ws || (ws && (ws.readyState === ws.CLOSED))) {
+        connect()
       }
     }
   }
@@ -126,12 +132,15 @@ module.exports = function (url) {
     check()
   }
 
-  function onclose () {
+  function onclose (evt) {
     connected = false
     self.emit('disconnect')
     if (read) {
       error(new Error('Disconnected while uploading'))
       fail()
+    }
+    if (!evt.wasClean) {
+      check()
     }
   }
 
@@ -163,14 +172,18 @@ module.exports = function (url) {
     }
   }
 
-  reconnect(url, function (err, websocket) {
+  function onreconnect (err, websocket) {
     ws = websocket
     ws.onopen = onopen
     ws.onclose = onclose
     ws.onmessage = onmessage
     ws.binaryType = 'arraybuffer'
     return err && read && error(err)
-  })
+  }
+
+  function connect () {
+    reconnect(url, onreconnect)
+  }
 
   self = function (file) {
     var o = {
@@ -249,6 +262,8 @@ module.exports = function (file, callback) {
 }
 
 },{}],5:[function(require,module,exports){
+// Invokes the callback on socket's errors
+
 var WS = window.MozWebSocket || window.WebSocket
 
 module.exports = function (url, callback) {
@@ -273,7 +288,8 @@ module.exports = function (url, callback) {
 
 var ready = require('./ready')
 var emitter = require('./upload/emitter')
-var upload = require('./upload')('wss://echo.websocket.org')
+// var upload = require('./upload')('wss://echo.websocket.org')
+var upload = require('./upload')('wss://localhost:61680')
 
 var events = emitter()
 var queue = []

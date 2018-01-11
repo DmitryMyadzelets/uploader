@@ -2,7 +2,8 @@
 
 var ready = require('./ready')
 var emitter = require('./upload/emitter')
-var upload = require('./upload')('wss://echo.websocket.org')
+// var upload = require('./upload')('wss://echo.websocket.org')
+var upload = require('./upload')('wss://localhost:61680')
 
 var events = emitter()
 var queue = []
