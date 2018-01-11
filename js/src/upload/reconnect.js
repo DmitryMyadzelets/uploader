@@ -1,3 +1,5 @@
+// Invokes the callback on socket's errors
+
 var WS = window.MozWebSocket || window.WebSocket
 
 module.exports = function (url, callback) {
