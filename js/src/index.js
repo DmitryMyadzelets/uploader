@@ -3,7 +3,6 @@
 var ready = require('./ready')
 var emitter = require('./upload/emitter')
 var upload = require('./upload')('wss://echo.websocket.org')
-// var upload = require('./upload')('wss://localhost:61680')
 
 var events = emitter()
 var queue = []
@@ -20,13 +19,6 @@ function expectFiles (el, callback) {
     }
   })
 }
-
-var test = require('./upload/websocket')('wss://localhost:61680')
-test
-  .on('connect', console.log.bind(console, 'connect'))
-  .on('connecting', console.log.bind(console, 'connecting'))
-  .on('disconnect', console.log.bind(console, 'disconnect'))
-  .on('disconnecting', console.log.bind(console, 'disconnecting'))
 
 // function elapsed (msec) {
 //   var sec = msec / 1000 | 0
