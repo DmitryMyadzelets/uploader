@@ -133,22 +133,26 @@ module.exports = function (url) {
   })
 
   ws.on('message', function (data) {
-    self.emit('progress', progress)
-      // TODO: check the message
-    if (meta) {
-      meta = null
+    // Expect JSON if data is string
+    if (typeof data === 'string') {
       try {
-        var o = JSON.parse(data)
-        if (o.error) {
+        data = JSON.parse(data)
+        // If server sent an error
+        if (data.error) {
           throw new Error(o.error.message)
         }
-        read = reader(file, onchunk)
-        read()
       } catch (err) {
         error(err)
         fail()
         check()
       }
+    }
+
+    self.emit('progress', progress)
+    if (meta) {
+      meta = null
+      read = reader(file, onchunk)
+      read()
     } else {
       if (next) {
         read()
