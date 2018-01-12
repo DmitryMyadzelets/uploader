@@ -5,75 +5,87 @@
   The return value of 'send' and 'close' methods should be ignored.
   Reconnect stops when you close the websocket.
 
-  The WebSocket may emit 'onclose' event regardless its previous state,
+  The WebSocket may invokes 'onclose' event regardless its previous state,
   i.e. if it wasn't open before.
   This websocket emits 'connect' and 'disconnect' events upon its state.
-  The 'error' event is emitted when it's in connected state only.
 */
-var emitter = require('./emitter')
 
+var emitter = require('./emitter')
 var WS = window.MozWebSocket || window.WebSocket
 
-module.exports = function (url) {
-  var self = emitter()
-  var ws, tid, connected
+var states = []
+states[WS.CONNECTING] = 'connecting'
+states[WS.OPEN] = 'connect'
+states[WS.CLOSING] = 'disconnecting'
+states[WS.CLOSED] = 'disconnect'
 
-  function onopen () {
-    connected = true
-    self.emit('connect')
+function isObject (o) { return typeof o === 'object' && o !== null }
+
+module.exports = function (url, opt) {
+  var ws, tid, ost
+  var self = emitter()
+  if (!isObject(opt)) {
+    opt = {}
   }
 
-  function onclose () {
-    if (connected) {
-      self.emit('disconnect')
+  function state () {
+    if (ws && (ost !== ws.readyState)) {
+      self.emit(states[ost = ws.readyState])
     }
-    connected = false
+    return ws && ws.readyState
+  }
+
+  function repair () {
+    tid = setTimeout(create, 5000)
+  }
+
+  function onerror (err) {
+    self.emit('error', err)
+  }
+
+  function onclose (evt) {
+    if (!evt.wasClean) {
+      repair()
+    }
+    state()
   }
 
   function onmessage (evt) {
     self.emit('message', evt.data)
   }
 
-  function onerror (err) {
-    tid = setTimeout(create, 5000)
-    if (connected) {
-      self.emit('error', err)
-    }
-  }
-
   function create () {
-    if (ws) {
-      ws = null
-    }
     ws = new WS(url)
-    ws.binaryType = 'arraybuffer'
-    // Events handlers
-    ws.onopen = onopen
-    ws.onclose = onclose
+    ws.onopen = state
     ws.onerror = onerror
+    ws.onclose = onclose
     ws.onmessage = onmessage
+    ws.binaryType = 'arraybuffer'
   }
 
-  self.send = function (data) {
-    return ws && ws.send(data)
+  self.send = function (message) {
+    return ws && ws.send(message)
   }
 
   self.close = function (code, reason) {
     clearTimeout(tid)
-    return ws && ws.close(code, reason)
+    return ws && ws.close(code || 1000, reason)
   }
 
   self.open = function () {
-    if (!connected) {
+    if (!ws || (ws && (ws.readyState === WS.CLOSED))) {
       create()
     }
+    return ws && (ws.readyState === WS.OPEN)
   }
 
   self.connected = function () {
-    return connected
+    return ws && (ws.readyState === WS.OPEN)
   }
 
-  create()
+  if (!opt.disconnected) {
+    self.open()
+  }
 
   return self
 }

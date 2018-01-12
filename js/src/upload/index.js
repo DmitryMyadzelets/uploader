@@ -1,6 +1,6 @@
 var reader = require('./reader')
 var emitter = require('./emitter')
-var reconnect = require('./reconnect')
+var websocket = require('./websocket')
 
 // Unique ID generator
 var uid = (function () {
@@ -17,11 +17,12 @@ var uid = (function () {
   {meta} states for sending file's meta information in JSON format.
   {read} implies reading and sending the file's content as binary data.
 
-  The module emits events: {connect, disconnect, progress, done, failed}
+  The module emits events: {progress, done, failed}
 */
 
 module.exports = function (url) {
-  var self, ws, connected, read, progress, next, file, meta
+  var self, read, progress, next, file, meta
+  var ws = websocket(url)
   var queue = []
 
   function error (err) {
@@ -36,7 +37,7 @@ module.exports = function (url) {
 
   // Entry point for the read-send process
   function check () {
-    if (connected && !(read || meta)) {
+    if (ws.open() && !(read || meta)) {
       if (queue.length > 0) {
         file = queue[0].file
         meta = JSON.stringify({
@@ -48,12 +49,10 @@ module.exports = function (url) {
       } else {
         ws.close()
       }
-    } else {
-      if (!ws || (ws && (ws.readyState === ws.CLOSED))) {
-        connect()
-      }
     }
   }
+
+  ws.on('connect', check)
 
   function onchunk (err, chunk) {
     if (err) {
@@ -66,31 +65,20 @@ module.exports = function (url) {
     ws.send(chunk.data)
   }
 
-  function onopen () {
-    connected = true
-    self.emit('connect')
-    check()
-  }
-
-  function onclose (evt) {
-    connected = false
-    self.emit('disconnect')
+  ws.on('disconnect', function () {
     if (read) {
       error(new Error('Disconnected while uploading'))
       fail()
     }
-    if (!evt.wasClean) {
-      check()
-    }
-  }
+  })
 
-  function onmessage (message) {
+  ws.on('message', function (data) {
     self.emit('progress', progress)
       // TODO: check the message
     if (meta) {
       meta = null
       try {
-        var o = JSON.parse(message.data)
+        var o = JSON.parse(data)
         if (o.error) {
           throw new Error(o.error.message)
         }
@@ -110,20 +98,7 @@ module.exports = function (url) {
         check()
       }
     }
-  }
-
-  function onreconnect (err, websocket) {
-    ws = websocket
-    ws.onopen = onopen
-    ws.onclose = onclose
-    ws.onmessage = onmessage
-    ws.binaryType = 'arraybuffer'
-    return err && read && error(err)
-  }
-
-  function connect () {
-    reconnect(url, onreconnect)
-  }
+  })
 
   self = function (file) {
     var o = {
@@ -134,6 +109,8 @@ module.exports = function (url) {
     check()
     return o
   }
+
+  self.websocket = ws
 
   return emitter(self)
 }
