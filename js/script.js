@@ -133,18 +133,19 @@ module.exports = function (url) {
   })
 
   ws.on('message', function (data) {
-    // Expect JSON if data is string
+    // Expect JSON if data is a string
     if (typeof data === 'string') {
       try {
         data = JSON.parse(data)
-        // If server sent an error
+        // If server has sent an error
         if (data.error) {
-          throw new Error(o.error.message)
+          throw new Error(data.error.message)
         }
       } catch (err) {
         error(err)
         fail()
         check()
+        return
       }
     }
 
@@ -340,12 +341,14 @@ module.exports = function (url, opt) {
 
 var ready = require('./ready')
 var emitter = require('./upload/emitter')
-var upload = require('./upload')('wss://echo.websocket.org')
+// var upload = require('./upload')('wss://echo.websocket.org')
+// var upload = require('./upload')('wss://piazzarussa.ru/api/pic/')
+var upload = require('./upload')('wss://127.0.0.1/api/pic/')
 
 var events = emitter()
 var queue = []
-var uploaded = []
 var failed = []
+var uploaded = []
 
 function expectFiles (el, callback) {
   el.addEventListener('change', function () {
@@ -403,6 +406,9 @@ ready(function () {
 
   upload
     .on('progress', progress)
+    .on('error', function (err) {
+      console.log(err)
+    })
   upload.websocket
     .on('connect', status.bind(null, true))
     .on('disconnect', status.bind(null, false))

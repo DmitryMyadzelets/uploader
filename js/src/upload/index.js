@@ -73,18 +73,19 @@ module.exports = function (url) {
   })
 
   ws.on('message', function (data) {
-    // Expect JSON if data is string
+    // Expect JSON if data is a string
     if (typeof data === 'string') {
       try {
         data = JSON.parse(data)
-        // If server sent an error
+        // If server has sent an error
         if (data.error) {
-          throw new Error(o.error.message)
+          throw new Error(data.error.message)
         }
       } catch (err) {
         error(err)
         fail()
         check()
+        return
       }
     }
 
